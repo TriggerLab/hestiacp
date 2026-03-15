@@ -1,0 +1,53 @@
+name: Force Sync Fork
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        required: false
+        default: "main"
+      upstream:
+        required: false
+        default: "https://github.com/hestiacp/hestiacp.git"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure PAT present
+        run: |
+          if [ -z "${{ secrets.MY_SYNC_TOKEN }}" ]; then
+            echo "Secret MY_SYNC_TOKEN is empty. Add a PAT with repo + workflow scopes."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MY_SYNC_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git user
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Add or update upstream
+        run: |
+          UP="${{ github.event.inputs.upstream }}"
+          if [ -z "$UP" ]; then UP="https://github.com/hestiacp/hestiacp.git"; fi
+          if git remote get-url upstream >/dev/null 2>&1; then git remote set-url upstream "$UP"; else git remote add upstream "$UP"; fi
+
+      - name: Fetch and prepare branch
+        run: |
+          BR="${{ github.event.inputs.branch }}"
+          git fetch upstream --prune --tags
+          git checkout -B "$BR" "upstream/$BR"
+
+      - name: Force push using PAT in origin URL
+        run: |
+          REPO="${{ github.repository }}"
+          git remote set-url origin "https://x-access-token:${{ secrets.MY_SYNC_TOKEN }}@github.com/${REPO}.git"
+          git push origin "${{ github.event.inputs.branch }}" --force
