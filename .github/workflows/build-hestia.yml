@@ -16,26 +16,25 @@ jobs:
   build-web:
     name: Build JS/CSS
     runs-on: ubuntu-latest
-    container:
-      image: node:current-slim
-      options: --user node
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'current'
+
       - name: Install npm dependencies
-        run: |
-          npm ci --ignore-scripts
+        run: npm ci --ignore-scripts
 
       - name: Run npm build
-        run: |
-          npm run build
+        run: npm run build
 
       - name: Upload web build artifact
         uses: actions/upload-artifact@v3
         with:
           name: web-build
-          # пытаемся сохранить типичные директории сборки (если нет — загрузчик не провалится)
           path: |
             build
             dist
@@ -44,11 +43,10 @@ jobs:
 
   build-deb:
     name: Build .deb packages
-    runs-on: ubuntu-latest
     needs: build-web
+    runs-on: ubuntu-latest
     container:
       image: debian:trixie
-      options: --user root
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -61,7 +59,6 @@ jobs:
 
       - name: Ensure timezone (CET)
         run: |
-          # сохранить ссылку и timezone, не проваливаться при ошибках
           ln -snf /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime || true
           echo CET > /etc/timezone || true
 
@@ -75,7 +72,6 @@ jobs:
 
       - name: Run hst_autocompile.sh
         run: |
-          # запускаем сборку; поведение совпадает с вашим Drone-пайплайном
           if [ -x ./src/hst_autocompile.sh ]; then
             ./src/hst_autocompile.sh --dontinstalldeps --hestia --debug --cross --noinstall --keepbuild '~localsrc'
           else
@@ -115,12 +111,11 @@ jobs:
         run: ls -la ./hestia || true
 
       - name: Upload via SCP
-        # action appleboy/scp-action загружает файлы по SSH/SCP
         uses: appleboy/scp-action@v0.1.6
         with:
           host: ${{ secrets.apt_server }}
           username: root
           key: ${{ secrets.ssh_key }}
           port: 22
-          source: "hestia/*"
+          source: hestia/*
           target: ${{ github.event.inputs.deploy_target }}
