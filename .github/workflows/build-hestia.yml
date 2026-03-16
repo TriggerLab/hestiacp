@@ -14,7 +14,6 @@ on:
 
 jobs:
   build-web:
-    name: Build JS/CSS
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,11 +41,8 @@ jobs:
           if-no-files-found: warn
 
   build-deb:
-    name: Build .deb packages
     needs: build-web
     runs-on: ubuntu-latest
-    container:
-      image: debian:trixie
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,10 +53,10 @@ jobs:
           name: web-build
           path: ./src/web_build
 
-      - name: Ensure timezone (CET)
+      - name: Ensure timezone on runner
         run: |
-          ln -snf /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime || true
-          echo CET > /etc/timezone || true
+          sudo ln -snf /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime || true
+          echo CET | sudo tee /etc/timezone >/dev/null || true
 
       - name: Make autocompile script executable
         run: |
@@ -70,15 +66,16 @@ jobs:
             echo "Warning: ./src/hst_autocompile.sh not found"
           fi
 
-      - name: Run hst_autocompile.sh
+      - name: Run hst_autocompile.sh inside debian:trixie container
         run: |
-          if [ -x ./src/hst_autocompile.sh ]; then
-            ./src/hst_autocompile.sh --dontinstalldeps --hestia --debug --cross --noinstall --keepbuild '~localsrc'
-          else
-            echo "Skipping autocompile: script missing or not executable"
-          fi
+          docker run --rm \
+            -v "${{ github.workspace }}":/work \
+            -w /work \
+            -v /tmp:/tmp \
+            debian:trixie \
+            bash -lc 'ln -snf /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime || true; echo CET > /etc/timezone || true; if [ -x ./src/hst_autocompile.sh ]; then ./src/hst_autocompile.sh --dontinstalldeps --hestia --debug --cross --noinstall --keepbuild "~localsrc"; else echo "Skipping autocompile: script missing or not executable"; fi'
 
-      - name: Collect .deb files into ./hestia/
+      - name: Collect .deb files into ./hestia
         run: |
           mkdir -p ./hestia
           if compgen -G "/tmp/hestiacp-src/deb/*.deb" > /dev/null; then
@@ -96,7 +93,6 @@ jobs:
           if-no-files-found: warn
 
   deploy:
-    name: Optional: SCP deploy to remote server
     if: ${{ github.event.inputs.deploy == 'true' }}
     needs: build-deb
     runs-on: ubuntu-latest
@@ -117,5 +113,5 @@ jobs:
           username: root
           key: ${{ secrets.ssh_key }}
           port: 22
-          source: hestia/*
+          source: "hestia/*"
           target: ${{ github.event.inputs.deploy_target }}
