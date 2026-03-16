@@ -1,0 +1,126 @@
+name: Build Hestia packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy after build? (true/false)'
+        required: false
+        default: 'false'
+      deploy_target:
+        description: 'Remote target path (if deploy=true)'
+        required: false
+        default: '/root/'
+
+jobs:
+  build-web:
+    name: Build JS/CSS
+    runs-on: ubuntu-latest
+    container:
+      image: node:current-slim
+      options: --user node
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install npm dependencies
+        run: |
+          npm ci --ignore-scripts
+
+      - name: Run npm build
+        run: |
+          npm run build
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: web-build
+          # пытаемся сохранить типичные директории сборки (если нет — загрузчик не провалится)
+          path: |
+            build
+            dist
+            public
+          if-no-files-found: warn
+
+  build-deb:
+    name: Build .deb packages
+    runs-on: ubuntu-latest
+    needs: build-web
+    container:
+      image: debian:trixie
+      options: --user root
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download web build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: web-build
+          path: ./src/web_build
+
+      - name: Ensure timezone (CET)
+        run: |
+          # сохранить ссылку и timezone, не проваливаться при ошибках
+          ln -snf /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime || true
+          echo CET > /etc/timezone || true
+
+      - name: Make autocompile script executable
+        run: |
+          if [ -f ./src/hst_autocompile.sh ]; then
+            chmod +x ./src/hst_autocompile.sh
+          else
+            echo "Warning: ./src/hst_autocompile.sh not found"
+          fi
+
+      - name: Run hst_autocompile.sh
+        run: |
+          # запускаем сборку; поведение совпадает с вашим Drone-пайплайном
+          if [ -x ./src/hst_autocompile.sh ]; then
+            ./src/hst_autocompile.sh --dontinstalldeps --hestia --debug --cross --noinstall --keepbuild '~localsrc'
+          else
+            echo "Skipping autocompile: script missing or not executable"
+          fi
+
+      - name: Collect .deb files into ./hestia/
+        run: |
+          mkdir -p ./hestia
+          if compgen -G "/tmp/hestiacp-src/deb/*.deb" > /dev/null; then
+            mv /tmp/hestiacp-src/deb/*.deb ./hestia/ || true
+          else
+            echo "No .deb files found in /tmp/hestiacp-src/deb/"
+          fi
+          ls -la ./hestia || true
+
+      - name: Upload hestia .deb artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: hestia-debs
+          path: hestia
+          if-no-files-found: warn
+
+  deploy:
+    name: Optional: SCP deploy to remote server
+    if: ${{ github.event.inputs.deploy == 'true' }}
+    needs: build-deb
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download built DEBs
+        uses: actions/download-artifact@v3
+        with:
+          name: hestia-debs
+          path: ./hestia
+
+      - name: Show files to upload
+        run: ls -la ./hestia || true
+
+      - name: Upload via SCP
+        # action appleboy/scp-action загружает файлы по SSH/SCP
+        uses: appleboy/scp-action@v0.1.6
+        with:
+          host: ${{ secrets.apt_server }}
+          username: root
+          key: ${{ secrets.ssh_key }}
+          port: 22
+          source: "hestia/*"
+          target: ${{ github.event.inputs.deploy_target }}
