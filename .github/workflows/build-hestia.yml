@@ -47,12 +47,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Download web build artifact
-        uses: actions/download-artifact@v6
-        with:
-          name: web-build
-          path: ./src/web_build
-
       - name: Ensure timezone on runner
         run: |
           sudo ln -snf /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime || true
