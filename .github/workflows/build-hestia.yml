@@ -73,7 +73,7 @@ jobs:
         run: |
           mkdir -p ./hestia
           if compgen -G "/tmp/hestiacp-src/deb/*.deb" > /dev/null; then
-            mv /tmp/hestiacp-src/deb/*.deb ./hestia/ || true
+            sudo chown -R "$(id -u):$(id -g)" /tmp/hestiacp-src/deb && mv /tmp/hestiacp-src/deb/*.deb ./hestia/ || true
           else
             echo "No .deb files found in /tmp/hestiacp-src/deb/"
           fi
