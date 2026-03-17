@@ -17,12 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 'current'
+          node-version: 24
 
       - name: Install npm dependencies
         run: npm ci --ignore-scripts
@@ -31,7 +31,7 @@ jobs:
         run: npm run build
 
       - name: Upload web build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: web-build
           path: |
@@ -45,10 +45,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download web build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: web-build
           path: ./src/web_build
@@ -86,7 +86,7 @@ jobs:
           ls -la ./hestia || true
 
       - name: Upload hestia .deb artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: hestia-debs
           path: hestia
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download built DEBs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: hestia-debs
           path: ./hestia
