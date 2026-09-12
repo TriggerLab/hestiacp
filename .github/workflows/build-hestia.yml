@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 24.21.0
 
       - name: Install npm dependencies
         run: npm ci --ignore-scripts
@@ -101,7 +101,7 @@ jobs:
         run: ls -la ./hestia || true
 
       - name: Upload via SCP
-        uses: appleboy/scp-action@v0.1.6
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.apt_server }}
           username: root
